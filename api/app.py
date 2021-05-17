@@ -10,6 +10,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-location", help="location of infoblox",  required=True)
     parser.add_argument("-members", help="list of DNS members",  required=True)
+    parser.add_argument("-servers", help="list of Name Servers",  required=True)
     parser.add_argument("-domains", help="list of FQDN Entries",  required=True)
     args = parser.parse_args()
 
@@ -28,6 +29,10 @@ def main():
     results = {}
     members = []
     domains = []
+    servers = []
+    with open(args.servers, 'r') as f:
+        servers = f.read().splitlines()
+
     with open(args.members, 'r') as f:
         members = f.read().splitlines()
 
@@ -41,22 +46,29 @@ def main():
         if member_data is None:
             results[member] = {}
 
-        for fqdn in domains:
-            data = {"fqdn" : fqdn,"member": member}
+        for server in servers:
+            server_data = results[member].get(server, None)
 
-            resp = session.post(f'{base_url}{functions["dig"]}', json=data)
-            formatted_resp = resp.json()
+            if server_data is None:
+                results[member][server] = {}
 
-            error = formatted_resp.get('Error', None)
+            for fqdn in domains:
+                data = {"fqdn" : fqdn,"member": member, 'name_server': server}
 
-            if error: 
-                results[member].update({
-                fqdn: formatted_resp.get('text')
-            })
-            else: 
-                results[member].update({
-                fqdn: 'Pass'
-            })
+                resp = session.post(f'{base_url}{functions["dig"]}', json=data)
+                formatted_resp = resp.json()
+
+                error = formatted_resp.get('Error', None)
+
+                if error: 
+                    results[member][server].update({
+                    fqdn: formatted_resp.get('text')
+                })
+                else: 
+                    print(formatted_resp)
+                    results[member][server].update({
+                    fqdn: 'Pass'
+                })
 
     with open('domain_output.json', 'w') as f:
         json.dump(results, f)
